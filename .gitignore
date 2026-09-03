@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Raw data lands here — never commit actual data
+raw/
+!raw/.gitkeep
+
+# dbt artifacts
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+
+.env
+*.duckdb
+.DS_Store
