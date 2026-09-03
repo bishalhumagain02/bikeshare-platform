@@ -29,8 +29,13 @@ make poll          # one-shot poll of live station_status
 - [x] Hive-partitioned Parquet landing (`dt=/hr=`)
 - [x] Idempotency test suite (delete a partition, rerun, row count is
       identical — see `tests/test_ingestion.py`)
+- [x] **Daily weather forecast archiver** (`src/ingestion/archive_weather_forecast.py`)
+      — captures the next 48h forecast, tagged with the moment it was
+      issued. This is the piece that cannot be recreated retroactively;
+      run `make archive-forecast` daily starting now, even before Week 5
+- [x] **Historical weather actuals backfill** (`src/ingestion/fetch_weather_actuals.py`)
+      — `make backfill-weather FROM=2024-01 TO=2025-12`
 - [ ] Historical trip backfill (`make backfill`)
-- [ ] Weather actuals + forecast archive (Open-Meteo)
 - [ ] dbt staging/marts/snapshots (Week 2)
 - [ ] Dagster orchestration (Week 3)
 
@@ -40,8 +45,10 @@ make poll          # one-shot poll of live station_status
 src/
   config.py                       # city config — swap cities here only
   ingestion/
-    schemas.py                    # Pydantic models, GBFS boundary validation
+    schemas.py                    # Pydantic models, GBFS + Open-Meteo boundary validation
     poll_station_status.py        # live poller: fetch → validate → land
+    archive_weather_forecast.py   # daily: capture next-48h forecast, tagged with issue time
+    fetch_weather_actuals.py      # one-time: backfill historical hourly weather
   features/                       # shared train/serve feature module (Week 6)
 dbt/
   models/{staging,marts,snapshots}

@@ -89,27 +89,3 @@ class GBFSDiscoveryFeed(BaseModel):
             if feed.get("name") == name:
                 return feed.get("url")
         return None
-
-
-# --- Weather (Open-Meteo) --------------------------------------------------
-# Both /v1/forecast (live + short historical via forecast_days) and
-# /v1/archive (ERA5 actuals back to 1940) return this same shape.
-
-
-class OpenMeteoHourly(BaseModel):
-    model_config = {"extra": "allow"}
-
-    time: list[str]
-    temperature_2m: list[float | None] | None = None
-    precipitation: list[float | None] | None = None
-    wind_speed_10m: list[float | None] | None = None
-    relative_humidity_2m: list[float | None] | None = None
-
-
-class OpenMeteoResponse(BaseModel):
-    model_config = {"extra": "allow"}
-
-    latitude: float
-    longitude: float
-    timezone: str
-    hourly: OpenMeteoHourly

@@ -1,0 +1,71 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "setup",
+      "type": "shell",
+      "command": "pip install -e .[dev]"
+    },
+    {
+      "label": "poll",
+      "type": "shell",
+      "options": {
+        "env": {
+          "PYTHONPATH": "."
+        }
+      },
+      "command": "python",
+      "args": ["-m", "src.ingestion.poll_station_status"]
+    },
+    {
+      "label": "poll-loop",
+      "type": "shell",
+      "options": {
+        "env": {
+          "PYTHONPATH": "."
+        }
+      },
+      "command": "python",
+      "args": ["-m", "src.ingestion.poll_station_status", "--loop"]
+    },
+    {
+      "label": "test",
+      "type": "shell",
+      "options": {
+        "env": {
+          "PYTHONPATH": "."
+        }
+      },
+      "command": "python",
+      "args": ["-m", "pytest", "tests/", "-v"]
+    },
+    {
+      "label": "lint",
+      "type": "shell",
+      "command": "ruff",
+      "args": ["check", "src/", "tests/"]
+    },
+    {
+      "label": "idempotency-check",
+      "type": "shell",
+      "options": {
+        "env": {
+          "PYTHONPATH": "."
+        }
+      },
+      "command": "python",
+      "args": ["-m", "pytest", "tests/test_ingestion.py", "-v", "-k", "idempotent"]
+    },
+    {
+      "label": "clean",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-Command", "Remove-Item -Recurse -Force raw/_deadletter/*, .pytest_cache"]
+    },
+    {
+      "label": "all",
+      "dependsOn": ["setup", "lint", "test", "idempotency-check"],
+      "dependsOrder": "sequence"
+    }
+  ]
+}
