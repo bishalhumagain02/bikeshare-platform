@@ -1,0 +1,39 @@
+# Polls Capital Bikeshare's live station_status every 10 minutes and
+# uploads each snapshot to Backblaze B2. Runs on GitHub's servers, not
+# on any personal machine — solves the "my local daytime is DC's
+# nighttime" coverage gap by not depending on any one timezone's
+# machine being on.
+#
+# NOTE: GitHub disables scheduled workflows automatically after 60
+# days with no repo activity (any commit/push resets that clock), and
+# schedule timing can drift by several minutes under GitHub's load —
+# expect roughly-every-10-minutes, not exactly-every-10-minutes.
+
+name: Poll station status
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}  # lets you trigger a manual test run from the Actions tab
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -e .
+
+      - name: Poll station status
+        env:
+          B2_ENDPOINT_URL: ${{ secrets.B2_ENDPOINT_URL }}
+          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          B2_BUCKET_NAME: ${{ secrets.B2_BUCKET_NAME }}
+        run: python -m src.ingestion.poll_station_status

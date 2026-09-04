@@ -33,9 +33,11 @@ from src.config import (
     ACTIVE_SYSTEM,
     FORECAST_HOURS_TO_ARCHIVE,
     OPEN_METEO_FORECAST_URL,
+    RAW_DIR,
     WEATHER_FORECASTS_DIR,
 )
 from src.ingestion.schemas import OpenMeteoResponse
+from src.storage import upload_if_configured
 
 MAX_RETRIES = 4
 BASE_BACKOFF_SECONDS = 2.0
@@ -116,6 +118,13 @@ def parse_and_archive(raw_text: str, issued_at: datetime | None = None) -> Path 
     out_path = out_dir / f"forecast_issued_{issued_at.strftime('%Y%m%dT%H%M%S')}.parquet"
     df.to_parquet(out_path, index=False)
     print(f"  archived {len(df)} forecast hours (issued {issued_at.isoformat()}) -> {out_path}")
+
+    try:
+        remote_key = str(out_path.relative_to(RAW_DIR)).replace("\\", "/")
+    except ValueError:
+        remote_key = f"weather/forecasts/{out_path.name}"
+    upload_if_configured(out_path, remote_key)
+
     return out_path
 
 

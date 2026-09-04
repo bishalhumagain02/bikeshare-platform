@@ -27,10 +27,12 @@ from pydantic import ValidationError
 from src.config import (
     ACTIVE_SYSTEM,
     DEADLETTER_DIR,
+    RAW_DIR,
     STATION_STATUS_DIR,
     STATION_STATUS_POLL_SECONDS,
 )
 from src.ingestion.schemas import GBFSDiscoveryFeed, StationStatusFeed
+from src.storage import upload_if_configured
 
 MAX_RETRIES = 4
 BASE_BACKOFF_SECONDS = 2.0
@@ -117,6 +119,15 @@ def parse_and_land(raw_text: str, fetched_at: datetime | None = None) -> Path | 
     out_path = out_dir / f"station_status_{fetched_at.strftime('%Y%m%dT%H%M%S')}.parquet"
     df.to_parquet(out_path, index=False)
     print(f"  wrote {len(df)} stations -> {out_path}")
+
+    # Optional — only fires when B2 env vars are set (e.g. running on
+    # GitHub Actions). Local runs and tests are unaffected.
+    try:
+        remote_key = str(out_path.relative_to(RAW_DIR)).replace("\\", "/")
+    except ValueError:
+        remote_key = f"station_status/{out_path.name}"
+    upload_if_configured(out_path, remote_key)
+
     return out_path
 
 

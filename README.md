@@ -40,6 +40,11 @@ make poll          # one-shot poll of live station_status
       change Capital Bikeshare made around 2020 (old: `Duration`,
       `Start date`, `Member type`; new: `ride_id`, `started_at`,
       `member_casual`) via an explicit mapping layer, not a silent concat
+- [x] **Cloud-based continuous collection** (GitHub Actions + Backblaze B2)
+      — solves the problem of a personal laptop's local day being the
+      source city's night. See `docs/cloud-setup.md`. Poll interval set
+      to 10 min (`src/config.py`), a deliberate trade-off vs. the plan's
+      5-min default, chosen for lower data volume
 - [ ] dbt staging/marts/snapshots (Week 2)
 - [ ] Dagster orchestration (Week 3)
 
@@ -54,6 +59,9 @@ src/
     archive_weather_forecast.py   # daily: capture next-48h forecast, tagged with issue time
     fetch_weather_actuals.py      # one-time: backfill historical hourly weather
     fetch_trip_history.py         # one-time: backfill trips, normalizes schema drift across eras
+  storage.py                      # optional B2 upload — no-op without cloud credentials
+  tools/
+    download_from_b2.py           # pull accumulated cloud data down locally, on demand
   features/                       # shared train/serve feature module (Week 6)
 dbt/
   models/{staging,marts,snapshots}

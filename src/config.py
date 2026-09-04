@@ -56,7 +56,9 @@ DEADLETTER_DIR = RAW_DIR / "_deadletter"
 
 # --- Polling ------------------------------------------------------------
 
-STATION_STATUS_POLL_SECONDS = 600  # 10 min, matches the plan's freshness bar
+STATION_STATUS_POLL_SECONDS = 600  # 10 min — chosen deliberately, lighter than the
+                                    # plan's 5-min default; still dense enough for
+                                    # 15/30/60-min lag features in Week 5
 FRESHNESS_WARN_SECONDS = 30 * 60
 FRESHNESS_ERROR_SECONDS = 2 * 60 * 60
 
