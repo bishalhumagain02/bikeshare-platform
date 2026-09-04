@@ -1,0 +1,4 @@
+ride_id,rideable_type,started_at,ended_at,start_station_name,start_station_id,end_station_name,end_station_id,start_lat,start_lng,end_lat,end_lng,member_casual
+A1B2C3D4E5F6G7H8,classic_bike,2024-06-01 00:02:15,2024-06-01 00:14:02,Lincoln Memorial,31258,14th & Independence Ave SW,31201,38.8893,-77.0502,38.8886,-77.0322,member
+H8G7F6E5D4C3B2A1,electric_bike,2024-06-01 00:06:40,2024-06-01 00:19:11,Massachusetts Ave & Dupont Circle NW,31200,Lincoln Memorial,31258,38.9097,-77.0439,38.8893,-77.0502,casual
+Z9Y8X7W6V5U4T3S2,classic_bike,2024-06-01 00:09:02,2024-06-01 00:13:55,14th & Independence Ave SW,31201,Massachusetts Ave & Dupont Circle NW,31200,38.8886,-77.0322,38.9097,-77.0439,member

@@ -35,7 +35,11 @@ make poll          # one-shot poll of live station_status
       run `make archive-forecast` daily starting now, even before Week 5
 - [x] **Historical weather actuals backfill** (`src/ingestion/fetch_weather_actuals.py`)
       — `make backfill-weather FROM=2024-01 TO=2025-12`
-- [ ] Historical trip backfill (`make backfill`)
+- [x] **Historical trip data backfill** (`src/ingestion/fetch_trip_history.py`)
+      — `make backfill FROM=2024-01 TO=2024-12`. Handles the real schema
+      change Capital Bikeshare made around 2020 (old: `Duration`,
+      `Start date`, `Member type`; new: `ride_id`, `started_at`,
+      `member_casual`) via an explicit mapping layer, not a silent concat
 - [ ] dbt staging/marts/snapshots (Week 2)
 - [ ] Dagster orchestration (Week 3)
 
@@ -49,6 +53,7 @@ src/
     poll_station_status.py        # live poller: fetch → validate → land
     archive_weather_forecast.py   # daily: capture next-48h forecast, tagged with issue time
     fetch_weather_actuals.py      # one-time: backfill historical hourly weather
+    fetch_trip_history.py         # one-time: backfill trips, normalizes schema drift across eras
   features/                       # shared train/serve feature module (Week 6)
 dbt/
   models/{staging,marts,snapshots}

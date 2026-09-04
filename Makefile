@@ -19,6 +19,11 @@ archive-forecast:
 backfill-weather:
 	PYTHONPATH=. python3 -m src.ingestion.fetch_weather_actuals --from $(FROM) --to $(TO)
 
+# Historical trip data, one-time backfill. Example:
+#   make backfill FROM=2024-01 TO=2024-12
+backfill:
+	PYTHONPATH=. python3 -m src.ingestion.fetch_trip_history --from $(FROM) --to $(TO)
+
 test:
 	PYTHONPATH=. python3 -m pytest tests/ -v
 
