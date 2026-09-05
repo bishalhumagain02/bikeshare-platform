@@ -21,6 +21,14 @@ import os
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Loads .env if present — one-time setup instead of retyping env vars
+# every terminal session. Silently does nothing if .env doesn't exist,
+# so this never breaks the GitHub Actions path (which uses real
+# environment secrets, not a .env file).
+load_dotenv()
+
 
 def _b2_configured() -> bool:
     return all(

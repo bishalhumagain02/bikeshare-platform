@@ -17,8 +17,11 @@ import os
 import sys
 
 import boto3
+from dotenv import load_dotenv
 
 from src.config import RAW_DIR
+
+load_dotenv()  # picks up .env if present, so you don't retype credentials
 
 REQUIRED_ENV = ["B2_ENDPOINT_URL", "B2_KEY_ID", "B2_APPLICATION_KEY", "B2_BUCKET_NAME"]
 
