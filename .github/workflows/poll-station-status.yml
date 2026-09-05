@@ -1,19 +1,25 @@
-# Polls Capital Bikeshare's live station_status every 10 minutes and
-# uploads each snapshot to Backblaze B2. Runs on GitHub's servers, not
-# on any personal machine — solves the "my local daytime is DC's
-# nighttime" coverage gap by not depending on any one timezone's
-# machine being on.
+# Polls Capital Bikeshare's live station_status and uploads each
+# snapshot to Backblaze B2. Runs on GitHub's servers, not on any
+# personal machine — solves the "my local daytime is DC's nighttime"
+# coverage gap by not depending on any one timezone's machine being on.
 #
-# NOTE: GitHub disables scheduled workflows automatically after 60
-# days with no repo activity (any commit/push resets that clock), and
-# schedule timing can drift by several minutes under GitHub's load —
-# expect roughly-every-10-minutes, not exactly-every-10-minutes.
+# WHY repository_dispatch INSTEAD OF schedule: GitHub's own `schedule:`
+# cron trigger is explicitly documented as best-effort and can be
+# delayed by tens of minutes to HOURS, especially on new/low-activity
+# repos (confirmed: this repo saw 2-3 hour delays with `schedule:`).
+# repository_dispatch is fired by an external ping (see
+# docs/cloud-setup.md — cron-job.org calls GitHub's REST API directly),
+# which runs near-instantly instead of sitting in GitHub's internal
+# scheduling queue.
+#
+# NOTE: GitHub disables scheduled/dispatched workflows automatically
+# after 60 days with no repo activity (any commit/push resets that).
 
 name: Poll station status
 
 on:
-  schedule:
-    - cron: "*/10 * * * *"
+  repository_dispatch:
+    types: [poll-station-status]
   workflow_dispatch: {}  # lets you trigger a manual test run from the Actions tab
 
 jobs:

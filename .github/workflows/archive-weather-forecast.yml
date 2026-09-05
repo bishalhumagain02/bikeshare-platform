@@ -1,12 +1,16 @@
 # Archives the next-48h weather forecast once a day and uploads it to
 # Backblaze B2. This is the time-sensitive one — a missed day is
 # forecast history that cannot be recreated retroactively.
+#
+# Uses repository_dispatch (externally pinged by cron-job.org, see
+# docs/cloud-setup.md) rather than GitHub's own `schedule:` trigger,
+# which is best-effort and can be delayed hours on low-activity repos.
 
 name: Archive weather forecast
 
 on:
-  schedule:
-    - cron: "0 6 * * *"  # 06:00 UTC daily — adjust if you want a different time
+  repository_dispatch:
+    types: [archive-weather-forecast]
   workflow_dispatch: {}
 
 jobs:
