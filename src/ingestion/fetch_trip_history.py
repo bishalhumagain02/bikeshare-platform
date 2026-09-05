@@ -82,9 +82,14 @@ def normalize_old_era(df: pd.DataFrame) -> pd.DataFrame:
     out = pd.DataFrame()
     out["trip_id"] = None  # old era has no unique ride identifier
     out["rideable_type"] = None  # not tracked pre-2020
-    out["started_at"] = pd.to_datetime(df["Start date"])
-    out["ended_at"] = pd.to_datetime(df["End date"])
-    out["duration_seconds"] = df["Duration"].astype("Int64")
+    out["started_at"] = pd.to_datetime(
+        df["Start date"], errors="coerce", utc=True, format="mixed"
+    )
+    out["ended_at"] = pd.to_datetime(
+        df["End date"], errors="coerce", utc=True, format="mixed"
+    )
+    # float64, not a nullable int type — see normalize_new_era for why.
+    out["duration_seconds"] = pd.to_numeric(df["Duration"], errors="coerce")
     out["start_station_id"] = df["Start station number"].astype(str)
     out["start_station_name"] = df["Start station"]
     out["end_station_id"] = df["End station number"].astype(str)
@@ -102,10 +107,37 @@ def normalize_new_era(df: pd.DataFrame) -> pd.DataFrame:
     out = pd.DataFrame()
     out["trip_id"] = df["ride_id"]
     out["rideable_type"] = df["rideable_type"]
-    out["started_at"] = pd.to_datetime(df["started_at"])
-    out["ended_at"] = pd.to_datetime(df["ended_at"])
+    # utc=True: real files sometimes mix timezone-aware timestamps
+    # (e.g. "...T00:15:00-04:00") with timezone-naive ones in the SAME
+    # column. Without forcing a single timezone, pandas can't build one
+    # consistent datetime64 array and the later subtraction raises
+    # "Cannot subtract tz-naive and tz-aware datetime-like objects" —
+    # hit in production. utc=True normalizes everything to UTC first.
+    #
+    # format="mixed": pandas otherwise tries to infer ONE date format
+    # from the column and cache it for speed — with genuinely mixed
+    # formats present, that inference can misfire and wrongly mark
+    # perfectly valid, differently-formatted rows as NaT — also hit in
+    # production (a normal, well-formed timestamp coerced to NaT for no
+    # reason other than a sibling row's differing format confusing the
+    # inferred pattern). format="mixed" makes pandas parse each row
+    # independently instead of assuming one shared format.
+    out["started_at"] = pd.to_datetime(
+        df["started_at"], errors="coerce", utc=True, format="mixed"
+    )
+    out["ended_at"] = pd.to_datetime(
+        df["ended_at"], errors="coerce", utc=True, format="mixed"
+    )
     duration = (out["ended_at"] - out["started_at"]).dt.total_seconds()
-    out["duration_seconds"] = duration.astype("Int64")
+    # Plain float64, NOT pandas' nullable "Int64" dtype. Real Capital
+    # Bikeshare files occasionally produce a duration Series that
+    # pandas' nullable-Int64 safe-cast check rejects even after
+    # to_numeric coercion (hit in production — root cause is a pandas
+    # internal edge case, not something worth chasing further). Trip
+    # duration doesn't need to be a strict integer; float64 handles
+    # NaN natively with no equivalent safe-cast restriction, and
+    # Parquet stores a float NaN as a clean null either way.
+    out["duration_seconds"] = pd.to_numeric(duration, errors="coerce")
     out["start_station_id"] = df["start_station_id"].astype(str)
     out["start_station_name"] = df["start_station_name"]
     out["end_station_id"] = df["end_station_id"].astype(str)
@@ -129,6 +161,14 @@ def normalize_trip_csv(raw_csv_text: str) -> pd.DataFrame:
     return normalize_new_era(df)
 
 
+def _is_junk_zip_entry(name: str) -> bool:
+    """macOS adds __MACOSX/ resource-fork metadata files to zips it
+    creates — these aren't real data and shouldn't even attempt
+    normalization (previously they'd hit detect_era and log a
+    confusing 'unrecognized schema' warning every single month)."""
+    return "__MACOSX/" in name or name.rsplit("/", 1)[-1].startswith("._")
+
+
 def backfill_month(year: int, month: int) -> int:
     """Download one month's zip, normalize every CSV inside it, write
     one Parquet partition. Overwrites that month's file — safe to rerun."""
@@ -149,6 +189,8 @@ def backfill_month(year: int, month: int) -> int:
     for name in zf.namelist():
         if not name.lower().endswith(".csv"):
             continue
+        if _is_junk_zip_entry(name):
+            continue  # macOS metadata junk, not real data — skip silently
         raw_text = zf.read(name).decode("utf-8", errors="replace")
         try:
             frames.append(normalize_trip_csv(raw_text))
