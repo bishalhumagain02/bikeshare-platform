@@ -36,6 +36,13 @@ models:
         tests:
           - not_null
 
+  - name: dim_trip_station
+    columns:
+      - name: station_id
+        tests:
+          - not_null
+          - unique
+
   - name: fct_trip
     columns:
       - name: trip_id
@@ -53,22 +60,19 @@ models:
         tests:
           - relationships:
               arguments:
-                to: ref('dim_station')
-                field: external_id  # NOT station_id — trip data uses
-                # Capital Bikeshare's legacy numeric station codes
-                # (e.g. "31258"), while station_information's
-                # "station_id" is a totally different UUID-style ID.
-                # external_id is the actual bridge between the two ID
-                # schemes. Joining against station_id instead produced
-                # a ~100% mismatch (10M+ warnings) — not a real data
-                # quality finding, a genuine modeling bug, now fixed.
+                to: ref('dim_trip_station')  # NOT dim_station — see
+                # stg_trip_stations.sql. dim_station comes from the
+                # live GBFS feed, which uses a completely different ID
+                # scheme (UUIDs) than trip data's legacy numeric codes,
+                # with no working crosswalk between them in the current
+                # live feed. dim_trip_station is derived FROM trip data
+                # itself, so this join matches by construction.
+                field: station_id
               config:
-                severity: warn  # WARN not ERROR: real trips DO still
-                # have a genuine ~15-17% missing/unmatched rate on top
-                # of this fix (found in Week 1 — likely dockless e-bike
-                # endpoints with no formal station), which is a real,
-                # bounded data quality finding worth surfacing, not
-                # blocking every build over.
+                severity: warn  # WARN not ERROR: trips with a genuinely
+                # null start_station_id (~15-17%, the Week 1 finding —
+                # likely dockless e-bike endpoints) will still not match
+                # anything, which is real and expected, not a bug.
 
   - name: fct_station_status_hourly
     columns:

@@ -35,6 +35,30 @@ from src.config import ACTIVE_SYSTEM, TRIPS_DIR
 MAX_RETRIES = 4
 BASE_BACKOFF_SECONDS = 2.0
 
+
+def _clean_station_id(series: pd.Series) -> pd.Series:
+    """Format a station ID column as clean strings, avoiding the
+    '31258.0' artifact: real Capital Bikeshare files sometimes have a
+    handful of missing station IDs (the Week 1 finding), which forces
+    pandas to read the WHOLE column as float64 (no NaN in a plain int
+    column) — so a clean value like 31258 becomes the float 31258.0,
+    and a bare .astype(str) then bakes that '.0' into the string
+    permanently. This converts whole-number floats back to clean
+    integer-looking strings, and preserves real nulls as null (not the
+    literal string "nan")."""
+    def _fmt(v):
+        if pd.isna(v):
+            return None
+        try:
+            f = float(v)
+            if f.is_integer():
+                return str(int(f))
+        except (TypeError, ValueError):
+            pass
+        return str(v)
+
+    return series.apply(_fmt)
+
 # Canonical schema every era gets mapped into. Downstream code (dbt
 # staging models, features) only ever needs to know this shape.
 CANONICAL_COLUMNS = [
@@ -121,9 +145,9 @@ def normalize_old_era(df: pd.DataFrame) -> pd.DataFrame:
         df["End date"], errors="coerce", utc=True, format="mixed"
     )
     out["duration_seconds"] = pd.to_numeric(df["Duration"], errors="coerce")
-    out["start_station_id"] = df["Start station number"].astype(str)
+    out["start_station_id"] = _clean_station_id(df["Start station number"])
     out["start_station_name"] = df["Start station"]
-    out["end_station_id"] = df["End station number"].astype(str)
+    out["end_station_id"] = _clean_station_id(df["End station number"])
     out["end_station_name"] = df["End station"]
     out["start_lat"] = pd.array([pd.NA] * n, dtype="Float64")
     out["start_lng"] = pd.array([pd.NA] * n, dtype="Float64")
@@ -169,9 +193,9 @@ def normalize_new_era(df: pd.DataFrame) -> pd.DataFrame:
     # NaN natively with no equivalent safe-cast restriction, and
     # Parquet stores a float NaN as a clean null either way.
     out["duration_seconds"] = pd.to_numeric(duration, errors="coerce")
-    out["start_station_id"] = df["start_station_id"].astype(str)
+    out["start_station_id"] = _clean_station_id(df["start_station_id"])
     out["start_station_name"] = df["start_station_name"]
-    out["end_station_id"] = df["end_station_id"].astype(str)
+    out["end_station_id"] = _clean_station_id(df["end_station_id"])
     out["end_station_name"] = df["end_station_name"]
     out["start_lat"] = df["start_lat"]
     out["start_lng"] = df["start_lng"]

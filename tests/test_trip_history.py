@@ -200,3 +200,60 @@ def test_mixed_timezone_aware_and_naive_timestamps_do_not_crash():
     # Rows with two clean, consistent timestamps must still compute correctly
     clean_row = out.iloc[1]  # index 1 has no injected garbage
     assert clean_row["duration_seconds"] == pytest.approx(600.0)
+
+
+def test_station_id_with_missing_values_does_not_get_dot_zero_suffix():
+    """Real bug hit in production: a station ID column with SOME missing
+    values gets read by pandas as float64 (no NaN representation in a
+    plain int column), so a clean ID like 31258 becomes 31258.0 — and a
+    bare .astype(str) bakes that '.0' permanently into the string,
+    breaking any downstream join against a clean-integer-string ID from
+    another source."""
+    from src.ingestion.fetch_trip_history import _clean_station_id
+
+    # Simulates exactly what pandas.read_csv produces for a column with
+    # some missing IDs: float64 dtype, real IDs represented as floats.
+    col = pd.Series([31258.0, 31817.0, float("nan"), 32418.0])
+    cleaned = _clean_station_id(col)
+
+    assert cleaned.iloc[0] == "31258"
+    assert cleaned.iloc[1] == "31817"
+    assert pd.isna(cleaned.iloc[2])  # missing stays missing, in whatever
+    # form pandas represents it at this intermediate step — the full
+    # pipeline's later dtype-enforcement step (tested separately below)
+    # is what guarantees a clean pd.NA in the final shipped output.
+    assert cleaned.iloc[3] == "32418"
+    # The bug this test exists for: none of the real values should ever
+    # carry a trailing ".0".
+    for v in cleaned:
+        if pd.notna(v):
+            assert not str(v).endswith(".0")
+
+
+def test_station_id_cleaning_end_to_end_via_normalize():
+    """Same bug, exercised through the real normalize path with a CSV
+    that has a genuinely missing station ID in one row (forcing pandas'
+    float64 promotion), matching the shape hit in production."""
+    from src.ingestion.fetch_trip_history import normalize_new_era
+
+    df = pd.DataFrame({
+        "ride_id": ["a", "b", "c"],
+        "rideable_type": ["classic_bike"] * 3,
+        "started_at": ["2024-06-01 00:00:00"] * 3,
+        "ended_at": ["2024-06-01 00:10:00"] * 3,
+        "start_station_name": ["X", "Y", "Z"],
+        "start_station_id": [31258, 31817, None],  # None forces float64
+        "end_station_name": ["X", "Y", "Z"],
+        "end_station_id": [32418, None, 31062],
+        "start_lat": [38.9] * 3,
+        "start_lng": [-77.0] * 3,
+        "end_lat": [38.9] * 3,
+        "end_lng": [-77.0] * 3,
+        "member_casual": ["member"] * 3,
+    })
+    out = normalize_new_era(df)
+    assert out["start_station_id"].tolist()[:2] == ["31258", "31817"]
+    assert pd.isna(out["start_station_id"].iloc[2])
+    assert out["end_station_id"].iloc[0] == "32418"
+    assert pd.isna(out["end_station_id"].iloc[1])
+    assert out["end_station_id"].iloc[2] == "31062"
