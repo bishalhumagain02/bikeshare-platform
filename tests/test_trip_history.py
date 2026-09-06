@@ -101,7 +101,102 @@ def test_old_era_has_no_lat_lon(old_era_csv):
     assert out["end_lat"].isna().all()
 
 
+def test_both_eras_produce_matching_dtypes_not_just_matching_names(old_era_csv, new_era_csv):
+    """Real bug hit in production: old era's all-null trip_id/lat/lon
+    columns and integer-typed duration_seconds silently diverged in
+    PHYSICAL dtype from new era's (string/Float64/float64 respectively)
+    even though both had the 'same' column names — which crashes DuckDB
+    the moment both eras are read together (Parquet 'NULL type' cannot
+    unify with VARCHAR; int64 cannot unify with float64 without a cast).
+    Column names matching is not enough — dtypes must match too."""
+    old_out = normalize_trip_csv(old_era_csv)
+    new_out = normalize_trip_csv(new_era_csv)
+    for col in CANONICAL_COLUMNS:
+        if col == "schema_era":
+            continue  # expected to legitimately differ ("old" vs "new")
+        assert str(old_out[col].dtype) == str(new_out[col].dtype), (
+            f"dtype mismatch on '{col}': old={old_out[col].dtype}, new={new_out[col].dtype}"
+        )
+
+
 def test_new_era_has_real_lat_lon(new_era_csv):
     out = normalize_trip_csv(new_era_csv)
     assert out["start_lat"].notna().all()
     assert out.iloc[0]["start_lat"] == pytest.approx(38.8893)
+
+
+# --- Real-world messiness: malformed timestamps and macOS zip junk --------
+
+def test_malformed_timestamp_becomes_null_not_a_crash():
+    """A real bug hit in production: some rows in real Capital Bikeshare
+    monthly files have unparseable timestamps. This must degrade to a
+    null duration for that one row, not crash the whole month's backfill."""
+    from pathlib import Path
+
+    bad_csv = (Path(__file__).parent / "fixtures" /
+               "trip_history_new_era_with_bad_timestamp.csv").read_text()
+    out = normalize_trip_csv(bad_csv)  # must not raise
+    assert len(out) == 3
+    bad_row = out[out["trip_id"] == "BADTIMESTAMP99"].iloc[0]
+    assert pd.isna(bad_row["started_at"])
+    assert pd.isna(bad_row["duration_seconds"])
+    # The two good rows around it must still compute correctly —
+    # one bad row shouldn't poison the whole batch.
+    good_row = out[out["trip_id"] == "A1B2C3D4E5F6G7H8"].iloc[0]
+    assert good_row["duration_seconds"] == 707
+
+
+def test_macosx_junk_files_are_skipped_before_parsing():
+    from src.ingestion.fetch_trip_history import _is_junk_zip_entry
+
+    assert _is_junk_zip_entry("__MACOSX/._202401-capitalbikeshare-tripdata.csv")
+    assert _is_junk_zip_entry("some/path/__MACOSX/._file.csv")
+    assert not _is_junk_zip_entry("202401-capitalbikeshare-tripdata.csv")
+    assert not _is_junk_zip_entry("data/real_trips.csv")
+
+
+def test_mixed_timezone_aware_and_naive_timestamps_do_not_crash():
+    """Real bug hit in production: some real Capital Bikeshare rows have
+    timezone-aware timestamps ("...T00:15:00-04:00") mixed with
+    timezone-naive ones in the SAME column. Without normalizing to a
+    single timezone first, subtracting started_at from ended_at raises
+    'Cannot subtract tz-naive and tz-aware datetime-like objects' —
+    this must not happen, on any mix of garbage."""
+    from src.ingestion.fetch_trip_history import normalize_new_era
+
+    n = 200
+    started = [f"2024-06-01 00:{i % 60:02d}:00" for i in range(n)]
+    ended = [f"2024-06-01 00:{(i + 10) % 60:02d}:00" for i in range(n)]
+    for i in range(0, n, 7):
+        started[i] = "not-a-real-date"
+    for i in range(0, n, 11):
+        ended[i] = ""
+    for i in range(0, n, 13):
+        started[i] = None
+    for i in range(0, n, 17):
+        ended[i] = "2024-06-01T00:15:00-04:00"  # tz-aware mixed into a naive column
+
+    df = pd.DataFrame({
+        "ride_id": [f"id{i}" for i in range(n)],
+        "rideable_type": ["classic_bike"] * n,
+        "started_at": started,
+        "ended_at": ended,
+        "start_station_name": ["A"] * n,
+        "start_station_id": ["1"] * n,
+        "end_station_name": ["B"] * n,
+        "end_station_id": ["2"] * n,
+        "start_lat": [38.9] * n,
+        "start_lng": [-77.0] * n,
+        "end_lat": [38.9] * n,
+        "end_lng": [-77.0] * n,
+        "member_casual": ["member"] * n,
+    })
+
+    out = normalize_new_era(df)  # must not raise
+    assert len(out) == n
+    assert out["duration_seconds"].dtype == "float64"
+    # Rows with any garbage timestamp must have a null duration, not a crash
+    assert out["duration_seconds"].isna().sum() > 0
+    # Rows with two clean, consistent timestamps must still compute correctly
+    clean_row = out.iloc[1]  # index 1 has no injected garbage
+    assert clean_row["duration_seconds"] == pytest.approx(600.0)

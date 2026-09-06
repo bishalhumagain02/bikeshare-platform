@@ -1,0 +1,30 @@
+name: 'bikeshare_platform'
+version: '1.0.0'
+config-version: 2
+
+profile: 'bikeshare_platform'
+
+model-paths: ["models"]
+snapshot-paths: ["snapshots"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# raw_data_path is relative to WHERE DBT RUNS (this dbt/ folder), so it
+# points up one level to the project's raw/ folder — the same one the
+# ingestion scripts write into. Override with --vars if your raw data
+# lives somewhere else (e.g. after downloading from B2 to a different path).
+vars:
+  raw_data_path: "../raw"
+
+models:
+  bikeshare_platform:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table

@@ -30,24 +30,49 @@ repository secret. Add all four:
 
 ## 3. Push this repo to GitHub
 
-The two workflow files are already set up:
-- `.github/workflows/poll-station-status.yml` — runs every 10 minutes
-- `.github/workflows/archive-weather-forecast.yml` — runs once daily at 06:00 UTC
+The two workflow files are already set up. They do NOT use GitHub's
+own `schedule:` cron trigger — that's documented by GitHub itself as
+best-effort, and in practice can be delayed by hours on a new,
+low-activity repo (confirmed on this project: 2-3 hour delays instead
+of the requested 10 minutes). Instead they use `repository_dispatch`,
+fired by an external service in step 4 below — this runs near-instantly
+because it's a direct API call, not a request sitting in GitHub's
+internal scheduling queue.
 
-They activate automatically once pushed, using the secrets above.
-No server, no laptop, no SSH required.
+Push everything, including `.github/workflows/`. No server, no laptop,
+no SSH required for this part.
 
-## 4. Verify it's actually running
+## 4. Set up an external pinger (cron-job.org) — this is what makes timing reliable
 
-GitHub repo → "Actions" tab → you should see runs appearing every ~10
-minutes for the poller. Click one to see its log output — it should
-show the same "wrote N stations -> ..." / "uploaded -> s3://..." lines
-you saw running it locally.
+1. Create a **GitHub Personal Access Token**: GitHub → Settings (your
+   account, not the repo) → Developer settings → Personal access
+   tokens → Tokens (classic) → Generate new token. Give it the `repo`
+   scope. Copy the token — it's shown once.
+2. Sign up free at **cron-job.org** (no credit card needed).
+3. Create a new cron job for the station poller:
+   - URL: `https://api.github.com/repos/YOUR_USERNAME/YOUR_REPO/dispatches`
+   - Request method: `POST`
+   - Headers:
+     - `Authorization: Bearer YOUR_GITHUB_TOKEN`
+     - `Accept: application/vnd.github+json`
+     - `Content-Type: application/json`
+   - Body: `{"event_type": "poll-station-status"}`
+   - Schedule: every 10 minutes
+4. Create a second cron job for the weather forecast, same setup except:
+   - Body: `{"event_type": "archive-weather-forecast"}`
+   - Schedule: once daily
 
-You can also trigger a manual test run immediately without waiting for
-the schedule: Actions tab → select the workflow → "Run workflow".
+## 5. Verify it's actually running
 
-## 5. Pull the accumulated data down locally, whenever you want to work
+GitHub repo → "Actions" tab → you should now see runs appearing close
+to every 10 minutes for the poller, not hours apart. Click one to see
+its log output — it should show the same "wrote N stations -> ..." /
+"uploaded -> s3://..." lines you saw running it locally.
+
+You can also trigger a manual test run anytime without waiting:
+Actions tab → select the workflow → "Run workflow".
+
+## 6. Pull the accumulated data down locally, whenever you want to work
 
 Set the same four env vars locally (in PowerShell, for one terminal session):
 
@@ -65,12 +90,19 @@ run repeatedly, it won't re-download or duplicate anything.
 
 ## Known caveats, honestly
 
-- GitHub Actions schedules can drift by a few minutes under load —
-  expect "roughly every 10 minutes," not exact.
-- GitHub automatically disables scheduled workflows after 60 days with
-  **no repository activity at all** — any commit or push resets this,
-  so as long as you're actively working on the repo across the 7
-  weeks, this won't trigger.
-- B2's free tier has generous limits for a project this size, but if
-  you ever see upload failures in the Actions log, check your B2
-  account dashboard for usage before assuming it's a code bug.
+- Your GitHub Personal Access Token goes into cron-job.org's servers,
+  not GitHub's — treat it like a password, and scope it to only what's
+  needed (`repo` scope is already the minimum required for
+  `dispatches`). If you're ever done with this project, revoke it from
+  GitHub's token settings.
+- GitHub automatically disables `repository_dispatch`/scheduled
+  workflows after 60 days with **no repository activity at all** — any
+  commit or push resets this, so as long as you're actively working on
+  the repo across the 7 weeks, this won't trigger.
+- cron-job.org's free tier has its own limits (checked at signup) —
+  comfortably enough for two jobs at 10-min/daily cadence for a project
+  this length, but worth a glance if you ever add more frequent jobs.
+- B2's free tier has generous limits for a project this size (measured:
+  ~300 MB over 7 weeks vs. a 10 GB allowance), but if you ever see
+  upload failures in the Actions log, check your B2 account dashboard
+  for usage before assuming it's a code bug.

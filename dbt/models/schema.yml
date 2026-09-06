@@ -1,0 +1,53 @@
+version: 2
+
+models:
+  - name: stg_trips
+    columns:
+      - name: trip_id
+        tests:
+          - not_null
+          - unique
+      - name: member_casual
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['member', 'casual']
+
+  - name: stg_stations
+    columns:
+      - name: station_id
+        tests:
+          - not_null
+          - unique
+
+  - name: dim_station
+    columns:
+      - name: station_id
+        tests:
+          - not_null
+
+  - name: fct_trip
+    columns:
+      - name: trip_id
+        tests:
+          - not_null
+          - unique
+      - name: start_station_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_station')
+                field: station_id
+              config:
+                severity: warn  # WARN not ERROR: ~15-17% of real trips
+                # have a missing/unmatched station_id — a genuine data
+                # quality finding from Week 1 (dockless e-bike endpoints,
+                # most likely), not a bug in this model. Erroring here
+                # would block every build; warning surfaces it honestly
+                # without doing that.
+
+  - name: fct_station_status_hourly
+    columns:
+      - name: station_id
+        tests:
+          - not_null

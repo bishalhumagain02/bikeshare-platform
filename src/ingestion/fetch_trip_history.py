@@ -78,29 +78,60 @@ def detect_era(columns: set[str]) -> str:
     )
 
 
+# Canonical dtype for every column both eras must agree on. Column
+# NAMES matching isn't enough — DuckDB refuses to read Parquet files
+# with the same column name but incompatible physical types (hit in
+# production: old era's all-null columns became Parquet's ambiguous
+# "NULL type", and its cleanly-integer duration became int64 while new
+# era's was always float64). Enforcing this explicitly, once, in one
+# place, is more robust than hoping every column assignment above
+# happens to agree.
+CANONICAL_DTYPES = {
+    "trip_id": "string",
+    "rideable_type": "string",
+    "duration_seconds": "float64",
+    "start_station_id": "string",
+    "start_station_name": "string",
+    "end_station_id": "string",
+    "end_station_name": "string",
+    "start_lat": "Float64",
+    "start_lng": "Float64",
+    "end_lat": "Float64",
+    "end_lng": "Float64",
+    "member_casual": "string",
+    "schema_era": "string",
+}
+
+
+def _enforce_canonical_dtypes(out: pd.DataFrame) -> pd.DataFrame:
+    for col, dtype in CANONICAL_DTYPES.items():
+        out[col] = out[col].astype(dtype)
+    return out
+
+
 def normalize_old_era(df: pd.DataFrame) -> pd.DataFrame:
     out = pd.DataFrame()
-    out["trip_id"] = None  # old era has no unique ride identifier
-    out["rideable_type"] = None  # not tracked pre-2020
+    n = len(df)
+    out["trip_id"] = pd.array([pd.NA] * n, dtype="string")  # old era has no unique ride ID
+    out["rideable_type"] = pd.array([pd.NA] * n, dtype="string")  # not tracked pre-2020
     out["started_at"] = pd.to_datetime(
         df["Start date"], errors="coerce", utc=True, format="mixed"
     )
     out["ended_at"] = pd.to_datetime(
         df["End date"], errors="coerce", utc=True, format="mixed"
     )
-    # float64, not a nullable int type — see normalize_new_era for why.
     out["duration_seconds"] = pd.to_numeric(df["Duration"], errors="coerce")
     out["start_station_id"] = df["Start station number"].astype(str)
     out["start_station_name"] = df["Start station"]
     out["end_station_id"] = df["End station number"].astype(str)
     out["end_station_name"] = df["End station"]
-    out["start_lat"] = None
-    out["start_lng"] = None
-    out["end_lat"] = None
-    out["end_lng"] = None
+    out["start_lat"] = pd.array([pd.NA] * n, dtype="Float64")
+    out["start_lng"] = pd.array([pd.NA] * n, dtype="Float64")
+    out["end_lat"] = pd.array([pd.NA] * n, dtype="Float64")
+    out["end_lng"] = pd.array([pd.NA] * n, dtype="Float64")
     out["member_casual"] = df["Member type"].str.lower()
     out["schema_era"] = "old"
-    return out[CANONICAL_COLUMNS]
+    return _enforce_canonical_dtypes(out)[CANONICAL_COLUMNS]
 
 
 def normalize_new_era(df: pd.DataFrame) -> pd.DataFrame:
@@ -148,7 +179,7 @@ def normalize_new_era(df: pd.DataFrame) -> pd.DataFrame:
     out["end_lng"] = df["end_lng"]
     out["member_casual"] = df["member_casual"].str.lower()
     out["schema_era"] = "new"
-    return out[CANONICAL_COLUMNS]
+    return _enforce_canonical_dtypes(out)[CANONICAL_COLUMNS]
 
 
 def normalize_trip_csv(raw_csv_text: str) -> pd.DataFrame:

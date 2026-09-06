@@ -1,0 +1,7 @@
+bikeshare_platform:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: 'bikeshare.duckdb'
+      threads: 4

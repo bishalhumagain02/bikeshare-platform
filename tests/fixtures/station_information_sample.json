@@ -1,0 +1,39 @@
+{
+  "last_updated": 1788416061,
+  "ttl": 60,
+  "version": "1.1",
+  "data": {
+    "stations": [
+      {
+        "station_id": "0825f2b1-1f3f-11e7-bf6b-3863bb334450",
+        "name": "Lincoln Memorial",
+        "lat": 38.8893,
+        "lon": -77.0502,
+        "capacity": 21,
+        "region_id": "41",
+        "legacy_id": "31258",
+        "station_type": "classic"
+      },
+      {
+        "station_id": "08254442-1f3f-11e7-bf6b-3863bb334450",
+        "name": "14th & Independence Ave SW",
+        "lat": 38.8886,
+        "lon": -77.0322,
+        "capacity": 27,
+        "region_id": "41",
+        "legacy_id": "31201",
+        "station_type": "classic"
+      },
+      {
+        "station_id": "f08db1df-054a-46c8-a3e1-b349f2a26d5e",
+        "name": "Massachusetts Ave & Dupont Circle NW",
+        "lat": 38.9097,
+        "lon": -77.0439,
+        "capacity": 33,
+        "region_id": "41",
+        "legacy_id": "31200",
+        "station_type": "classic"
+      }
+    ]
+  }
+}
