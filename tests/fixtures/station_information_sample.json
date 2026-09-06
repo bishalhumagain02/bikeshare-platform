@@ -11,7 +11,7 @@
         "lon": -77.0502,
         "capacity": 21,
         "region_id": "41",
-        "legacy_id": "31258",
+        "external_id": "31258",
         "station_type": "classic"
       },
       {
@@ -21,7 +21,7 @@
         "lon": -77.0322,
         "capacity": 27,
         "region_id": "41",
-        "legacy_id": "31201",
+        "external_id": "31201",
         "station_type": "classic"
       },
       {
@@ -31,7 +31,7 @@
         "lon": -77.0439,
         "capacity": 33,
         "region_id": "41",
-        "legacy_id": "31200",
+        "external_id": "31200",
         "station_type": "classic"
       }
     ]

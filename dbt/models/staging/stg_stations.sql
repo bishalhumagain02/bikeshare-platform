@@ -19,7 +19,13 @@ renamed as (
         capacity,
         region_id,
         station_type,
-        legacy_id,
+        -- NOTE: real GBFS feeds vary on this field's name across spec
+        -- versions ("legacy_id" in some, "external_id" in others) —
+        -- confirmed on this project's actual data that Capital
+        -- Bikeshare's live feed uses "external_id". If you ever swap
+        -- cities and hit a "column not found" error here again, check
+        -- which name that feed actually uses.
+        external_id,
         fetched_at,
         dt as partition_date
 

@@ -13,7 +13,7 @@ select
     capacity,
     region_id,
     station_type,
-    legacy_id,
+    external_id,
     dbt_valid_from as valid_from,
     coalesce(dbt_valid_to, timestamp '9999-12-31') as valid_to,
     dbt_valid_to is null as is_current

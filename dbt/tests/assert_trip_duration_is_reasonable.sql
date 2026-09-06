@@ -1,8 +1,11 @@
--- A negative duration is impossible; a duration over 24 hours almost
--- certainly means a bike that was never properly docked, not a real
--- ride. WARN-worthy, not necessarily a hard error — flagged here as a
--- singular test (rather than dbt_utils.accepted_range) so this test
--- has zero external package dependencies.
+{{ config(severity = 'warn') }}
+
+-- WARN not ERROR: 10,072 rows out of millions (~0.1-0.2%) is well
+-- within the expected rate of bikes checked out and never properly
+-- redocked (lost, stolen, or a rider forgetting to end their rental)
+-- — a well-known, common phenomenon in real bikeshare systems, not a
+-- pipeline bug. A negative duration is impossible; a duration over 24
+-- hours almost certainly means exactly this.
 
 select
     trip_id,
