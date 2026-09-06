@@ -16,3 +16,4 @@ dbt/logs/
 .env
 *.duckdb
 .DS_Store
+.venv/
