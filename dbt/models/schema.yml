@@ -43,6 +43,32 @@ models:
           - not_null
           - unique
 
+  - name: mart_ridership_daily
+    columns:
+      - name: trip_date
+        tests:
+          - not_null
+          - unique
+
+  - name: mart_station_empty_hours
+    columns:
+      - name: station_id
+        tests:
+          - not_null
+          - unique
+
+  - name: mart_capacity_exceedance
+    columns:
+      - name: start_station_id
+        tests:
+          - not_null
+
+  - name: mart_commute_corridors
+    columns:
+      - name: station_a
+        tests:
+          - not_null
+
   - name: fct_trip
     columns:
       - name: trip_id
