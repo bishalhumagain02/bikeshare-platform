@@ -38,8 +38,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dbt
-        run: pip install dbt-core dbt-duckdb
+      - name: Install dependencies
+        run: |
+          pip install -e .
+          pip install dbt-core dbt-duckdb
 
       - name: Build a small sample raw/ folder from the test fixtures
         run: |
