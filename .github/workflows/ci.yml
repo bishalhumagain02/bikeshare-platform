@@ -1,0 +1,91 @@
+# CI: runs on every push. Lints Python, runs the full pytest suite
+# (all fixture-based, no real network or cloud credentials needed), and
+# builds the dbt project against a small sampled subset of real data
+# committed as test fixtures — never the full multi-GB raw/ folder.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check src/ tests/
+
+      - name: Run tests
+        run: PYTHONPATH=. pytest tests/ -v
+
+  dbt-build-sample:
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dbt
+        run: pip install dbt-core dbt-duckdb
+
+      - name: Build a small sample raw/ folder from the test fixtures
+        run: |
+          mkdir -p ci_sample_raw
+          PYTHONPATH=. python3 - <<'PYEOF'
+          import json
+          from pathlib import Path
+          from datetime import datetime, timezone
+
+          import pandas as pd
+
+          import src.ingestion.poll_station_status as pss
+          import src.ingestion.poll_station_information as psi
+          import src.ingestion.fetch_trip_history as fth
+
+          sample_raw = Path("ci_sample_raw")
+          pss.STATION_STATUS_DIR = sample_raw / "station_status"
+          psi.STATION_INFO_DIR = sample_raw / "station_information"
+
+          raw_status = open("tests/fixtures/station_status_sample.json").read()
+          pss.parse_and_land(raw_status, fetched_at=datetime(2026, 9, 3, 12, 0, 0, tzinfo=timezone.utc))
+
+          raw_info = open("tests/fixtures/station_information_sample.json").read()
+          psi.parse_and_land(raw_info, fetched_at=datetime(2026, 9, 3, 12, 0, 0, tzinfo=timezone.utc))
+
+          new_csv = open("tests/fixtures/trip_history_new_era.csv").read()
+          df = fth.normalize_trip_csv(new_csv)
+          df["system_id"] = "capital_bikeshare"
+          out_dir = sample_raw / "trips/year=2024/month=06"
+          out_dir.mkdir(parents=True, exist_ok=True)
+          df.to_parquet(out_dir / "trips_202406.parquet", index=False)
+
+          weather_dir = sample_raw / "weather/actuals/year=2024"
+          weather_dir.mkdir(parents=True, exist_ok=True)
+          weather_df = pd.DataFrame({
+              "time_utc": pd.date_range("2024-06-01", periods=24, freq="h", tz="UTC"),
+              "temperature_2m_c": [20.0] * 24,
+              "precipitation_mm": [0.0] * 24,
+              "wind_speed_10m_kmh": [10.0] * 24,
+              "relative_humidity_2m_pct": [60.0] * 24,
+              "system_id": "capital_bikeshare",
+          })
+          weather_df.to_parquet(weather_dir / "weather_actuals_202406.parquet", index=False)
+          PYEOF
+
+      - name: dbt build against the sample
+        working-directory: dbt
+        run: |
+          DBT_PROFILES_DIR=. dbt build --vars '{"raw_data_path": "../ci_sample_raw"}'

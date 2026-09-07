@@ -24,6 +24,7 @@ dbt = [
 dagster-extra = [
     "dagster>=1.7",
     "dagster-webserver>=1.7",
+    "dagster-dbt>=0.29",
 ]
 
 [tool.ruff]
