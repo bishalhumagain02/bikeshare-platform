@@ -215,8 +215,28 @@ rate for this kind of system.
 
 ---
 
-## Process finding: stale incremental models after upstream fixes
+## Real bug: relative raw_data_path breaks when queried from a different working directory
 
+**Symptom:** `src/ml/train.py`, run from the project root, failed with
+`IO Error: No files found that match the pattern "../raw/station_status/..."`
+even though `dbt build` had just succeeded moments earlier.
+
+**Root cause:** staging models are dbt VIEWS, not tables — a view
+doesn't store data, it stores the SQL (including the literal
+`read_parquet('../raw/...')` call) and re-runs it every time it's
+queried. `../raw` resolves correctly when dbt itself runs from inside
+`dbt/`, but any OTHER process connecting to `bikeshare.duckdb` from a
+different working directory (train.py and the Streamlit dashboard both
+run from the project root) resolves that same relative path against
+their own working directory instead — one level off from where it
+actually points.
+
+**Fix:** always build with an absolute `raw_data_path`, not a relative
+one — see the Quickstart in the README. This makes the compiled views
+location-independent, regardless of which folder later queries them
+from.
+
+## Process finding: stale incremental models after upstream fixes
 **Symptom:** after fixing the station-ID crosswalk issue and rebuilding
 `dim_trip_station` fresh, the relationship test *still* showed ~10
 million mismatches — nearly unchanged from before the fix.

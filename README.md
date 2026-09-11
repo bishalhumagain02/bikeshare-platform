@@ -25,7 +25,15 @@ For the dbt warehouse:
 ```bash
 cd dbt
 pip install dbt-core dbt-duckdb
-DBT_PROFILES_DIR=. dbt build --vars '{"raw_data_path": "../raw"}'
+# IMPORTANT: use an ABSOLUTE path, not a relative one. Staging models are
+# dbt VIEWS, which re-run their read_parquet() call using whatever path
+# was compiled in — a relative path like "../raw" resolves correctly
+# only when queried from inside dbt/. Any script that later connects to
+# bikeshare.duckdb from a DIFFERENT working directory (e.g. src/ml/train.py
+# or dashboard/app.py, both run from the project root) would then resolve
+# that relative path wrong and fail with "No files found". An absolute
+# path avoids this entirely — see docs/DECISIONS.md for the full story.
+DBT_PROFILES_DIR=. dbt build --vars "{\"raw_data_path\": \"$(pwd)/../raw\"}"
 ```
 
 ## Status
@@ -108,6 +116,3 @@ docs/
   DECISIONS.md                    # every real bug/finding hit, with root cause and fix
 raw/                               # data lands here locally when downloaded
 ```
-
-
-
