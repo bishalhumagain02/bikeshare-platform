@@ -47,30 +47,33 @@ polling history has accumulated (see the honest data-volume caveat in
 
 ### First real-data run (~3 days of history, 371,514 rows)
 
+**Post-timezone-fix result** (weather features now genuinely
+participating, confirmed by non-zero importance below):
+
 | | MAE |
 |---|---|
 | Persistence baseline | **0.803** (best) |
 | Seasonal-naive | 1.349 |
-| **Model (LightGBM)** | 0.982 |
-| Station-hour-mean baseline | 2.900 |
+| **Model (LightGBM)** | 0.973 |
+| Station-hour-mean baseline | 2.924 |
 
-**The model did not beat the best baseline on this first real run** —
-reported honestly, exactly per the plan's own warning that this is a
-common, legitimate outcome, not something to hide. With only ~3 days
-of real history, persistence (bike counts often don't change much in
-60 minutes) is a genuinely hard baseline to beat; there isn't yet
-enough variety in the training data for the model to learn much
-beyond what persistence already captures. This result should be
-re-checked once more weeks of real history accumulate.
+**The model still does not beat the best baseline** — and this time
+it's a fully trustworthy result, not one confounded by the timezone
+bug (`forecast_temp_c` now shows real importance: 265, up from 0
+before the fix; `forecast_precip_mm` barely registers at 1, suggesting
+precipitation isn't very informative at this station granularity yet,
+which is itself a believable finding rather than a bug symptom).
 
-A separate real bug was found and fixed during this run — the weather
-forecast features initially showed 0% coverage due to a timezone bug
-(DuckDB's session timezone defaulting to the host machine's local
-setting rather than UTC — see `docs/DECISIONS.md` for the full story).
-Re-run after that fix to get a trustworthy read on whether weather
-genuinely helps or not; the 0-importance result before the fix was an
-artifact of the bug, not a real finding about weather's predictive
-value.
+With only ~3 days of real history, persistence remains genuinely hard
+to beat — there isn't yet enough time-of-day/day-of-week variety for
+the model to learn beyond what "assume no change" already captures.
+Top features: `rolling_mean_60m`, `capacity`, `lag_60m`, `lag_30m` —
+recent trend and station size dominate; the weather signal is real but
+comparatively minor at this data volume. Re-check this comparison
+after several more weeks of accumulated history — the honest
+expectation is that lag/rolling features become more informative as
+more genuine day-to-day variation enters the training data, which
+could tip the balance the model's way.
 
 ## Where it genuinely fails or shouldn't be trusted
 
