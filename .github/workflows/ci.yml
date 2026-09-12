@@ -85,6 +85,12 @@ jobs:
               "system_id": "capital_bikeshare",
           })
           weather_df.to_parquet(weather_dir / "weather_actuals_202406.parquet", index=False)
+
+          import src.ingestion.archive_weather_forecast as awf
+          from datetime import timezone as tz
+          awf.WEATHER_FORECASTS_DIR = sample_raw / "weather/forecasts"
+          forecast_raw = open("tests/fixtures/open_meteo_forecast_sample.json").read()
+          awf.parse_and_archive(forecast_raw, issued_at=datetime(2026, 9, 3, 8, 0, 0, tzinfo=tz.utc))
           PYEOF
 
       - name: dbt build against the sample
