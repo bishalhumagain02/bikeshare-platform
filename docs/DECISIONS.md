@@ -215,8 +215,51 @@ rate for this kind of system.
 
 ---
 
-## Real bug: relative raw_data_path breaks when queried from a different working directory
+## Real bug: DuckDB's default timezone follows the host machine's OS setting
 
+**Symptom:** the ML training pipeline's weather forecast features
+showed exactly 0% coverage (100% null) — but only on one machine, not
+another. Identical code, different real result depending on which
+computer ran it.
+
+**Root cause:** DuckDB defaults its session timezone to the HOST
+OS's local timezone, not UTC. On a machine set to a *non-whole-hour*
+UTC offset (Nepal Standard Time is UTC+5:45), a timestamp loaded from
+DuckDB into pandas carries that +05:45 offset. The feature code
+floored timestamps to "the nearest hour" to align with hourly weather
+forecast data — but flooring operates on a timestamp's own (local)
+wall-clock representation, and +05:45 means a true UTC hour boundary
+(e.g. 18:00 UTC) displays as an off-the-hour local time (23:45), which
+never survives an hour-floor operation cleanly. The join silently
+matched zero rows — not an error, just consistently wrong, and only
+on machines set to a non-whole-hour timezone offset.
+
+**Why this was invisible during development:** the development
+sandbox happened to default to UTC, where this exact bug is
+mathematically impossible to trigger (a whole-hour offset always
+floors correctly). The bug was real from the first line of this code,
+just undetectable in the environment it was written in.
+
+**Fix, at two layers (defense in depth, not just one):**
+1. Force `SET TimeZone='UTC'` immediately on every DuckDB connection
+   (`src/ml/train.py`, `dashboard/app.py`) — makes the common case
+   correct.
+2. Independently, `_add_forecast_features()` itself now explicitly
+   converts every timestamp to UTC before any hour-flooring or
+   comparison — correct even if some future caller forgets step 1.
+
+**Verified fixed** by running the test suite under both the normal
+sandbox timezone AND a simulated Nepal timezone
+(`TZ='Asia/Kathmandu' pytest`) — same 52/52 pass either way, proving
+the fix isn't itself accidentally UTC-dependent.
+
+**Lesson:** any code touching timestamps across a machine boundary
+(a database session, a file, an API) should never assume the
+environment's default timezone — this bug would have shipped
+silently to an interviewer's machine if it happened to be set to UTC,
+passing every test I ran on my own (also UTC) development machine.
+
+## Real bug: relative raw_data_path breaks when queried from a different working directory
 **Symptom:** `src/ml/train.py`, run from the project root, failed with
 `IO Error: No files found that match the pattern "../raw/station_status/..."`
 even though `dbt build` had just succeeded moments earlier.

@@ -30,7 +30,12 @@ def get_connection():
             "folder first."
         )
         st.stop()
-    return duckdb.connect(str(DB_PATH), read_only=True)
+    con = duckdb.connect(str(DB_PATH), read_only=True)
+    # Same fix as src/ml/train.py — see docs/DECISIONS.md. Without this,
+    # any date/time display or comparison here would silently differ
+    # depending on the host machine's OS timezone.
+    con.execute("SET TimeZone='UTC'")
+    return con
 
 
 con = get_connection()

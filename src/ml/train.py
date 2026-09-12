@@ -55,6 +55,16 @@ def load_feature_data() -> pd.DataFrame:
         sys.exit(1)
 
     con = duckdb.connect(str(DB_PATH), read_only=True)
+    # CRITICAL: DuckDB's default session timezone follows the HOST
+    # MACHINE's OS timezone setting, not UTC. Without forcing this,
+    # identical code produces different (and silently wrong) results
+    # depending on which computer runs it — hit in production: a
+    # feature join that worked in dev (a UTC-timezone machine) failed
+    # completely on a machine set to Nepal time (+05:45), because
+    # flooring a non-whole-hour-offset local timestamp to the nearest
+    # "hour" does not land on the same instant as a true UTC hour
+    # boundary. See docs/DECISIONS.md for the full story.
+    con.execute("SET TimeZone='UTC'")
     station_status = con.execute(
         "select station_id, fetched_at, num_bikes_available, num_docks_available "
         "from stg_station_status"

@@ -45,6 +45,33 @@ full run on real accumulated station_status history.** Re-run
 polling history has accumulated (see the honest data-volume caveat in
 `docs/DECISIONS.md`) before treating any number here as a real result.
 
+### First real-data run (~3 days of history, 371,514 rows)
+
+| | MAE |
+|---|---|
+| Persistence baseline | **0.803** (best) |
+| Seasonal-naive | 1.349 |
+| **Model (LightGBM)** | 0.982 |
+| Station-hour-mean baseline | 2.900 |
+
+**The model did not beat the best baseline on this first real run** —
+reported honestly, exactly per the plan's own warning that this is a
+common, legitimate outcome, not something to hide. With only ~3 days
+of real history, persistence (bike counts often don't change much in
+60 minutes) is a genuinely hard baseline to beat; there isn't yet
+enough variety in the training data for the model to learn much
+beyond what persistence already captures. This result should be
+re-checked once more weeks of real history accumulate.
+
+A separate real bug was found and fixed during this run — the weather
+forecast features initially showed 0% coverage due to a timezone bug
+(DuckDB's session timezone defaulting to the host machine's local
+setting rather than UTC — see `docs/DECISIONS.md` for the full story).
+Re-run after that fix to get a trustworthy read on whether weather
+genuinely helps or not; the 0-importance result before the fix was an
+artifact of the bug, not a real finding about weather's predictive
+value.
+
 ## Where it genuinely fails or shouldn't be trusted
 
 - **Seasonal-naive baseline is undercomputed with limited history.**

@@ -96,12 +96,28 @@ def _add_forecast_features(df: pd.DataFrame, forecast_df: pd.DataFrame) -> pd.Da
     A forecast issued after fetched_at is invisible to this join by
     construction, not by a filter that could be forgotten."""
     df = df.copy()
-    df["target_hour"] = (df["fetched_at"] + pd.Timedelta(minutes=60)).dt.floor("h")
+    # Convert to UTC BEFORE flooring, regardless of what timezone the
+    # input timestamps arrived in. Flooring a timestamp to "the nearest
+    # hour" operates on its LOCAL wall-clock representation — for any
+    # timezone with a non-whole-hour UTC offset (e.g. Nepal's +05:45),
+    # that does NOT land on the same instant as a true UTC hour
+    # boundary, which is what forecast_target_time is actually anchored
+    # to. This bit in production: a caller that forgot to force UTC on
+    # its DuckDB connection got silently zero matches. Converting here,
+    # inside the function itself, makes this correct regardless of what
+    # the caller does — defense in depth, not just a connection-level
+    # setting that could be forgotten elsewhere.
+    fetched_at_utc = df["fetched_at"].dt.tz_convert("UTC")
+    df["target_hour"] = (fetched_at_utc + pd.Timedelta(minutes=60)).dt.floor("h")
 
     df_sorted = df.sort_values("fetched_at")
 
     # pandas' merge_asof `by=` needs matching column NAMES on both
-    # sides, so rename before joining.
+    # sides, so rename before joining. Same UTC-conversion applies to
+    # the forecast side's own timestamp columns.
+    forecast_df = forecast_df.copy()
+    forecast_df["issued_at"] = forecast_df["issued_at"].dt.tz_convert("UTC")
+    forecast_df["forecast_target_time"] = forecast_df["forecast_target_time"].dt.tz_convert("UTC")
     forecast_renamed = forecast_df.rename(columns={
         "forecast_target_time": "target_hour",
         "temperature_2m_c": "forecast_temp_c",
@@ -109,13 +125,13 @@ def _add_forecast_features(df: pd.DataFrame, forecast_df: pd.DataFrame) -> pd.Da
     }).sort_values("issued_at")
 
     merged = pd.merge_asof(
-        df_sorted,
+        df_sorted.assign(fetched_at_utc=df_sorted["fetched_at"].dt.tz_convert("UTC")),
         forecast_renamed[["target_hour", "issued_at", "forecast_temp_c", "forecast_precip_mm"]],
-        left_on="fetched_at",
+        left_on="fetched_at_utc",
         right_on="issued_at",
         by="target_hour",
         direction="backward",
-    )
+    ).drop(columns=["fetched_at_utc"])
     return merged.sort_index()
 
 

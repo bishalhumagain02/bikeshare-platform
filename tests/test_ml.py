@@ -101,3 +101,35 @@ def test_folds_are_robust_to_gaps_in_data():
     for _train_end, test_start, test_end in folds:
         n_test = ((df["fetched_at"] >= test_start) & (df["fetched_at"] < test_end)).sum()
         assert n_test > 0, "a fold's test window was empty — the gap-robustness fix regressed"
+
+
+def test_forecast_hour_alignment_is_timezone_independent():
+    """Regression test for a real, serious bug: DuckDB's default
+    session timezone follows the HOST MACHINE's OS setting, not UTC.
+    On a machine set to a non-whole-hour offset (e.g. Nepal's +05:45),
+    flooring a local-tz timestamp to the 'nearest hour' does NOT land
+    on the same instant as a true UTC hour boundary — causing the
+    weather forecast join to silently match zero rows, on that
+    machine only. This test simulates exactly that scenario (a
+    timestamp already carrying a +05:45 offset, as if a caller forgot
+    to force UTC before querying DuckDB) and confirms the forecast
+    join still finds the correct match regardless."""
+    from src.features.build_features import _add_forecast_features
+
+    df = pd.DataFrame({
+        "fetched_at": [pd.Timestamp("2026-09-03 22:45:00+05:45")],  # = 17:00 UTC
+    })
+    # A forecast for true UTC hour 18:00 (17:00 UTC + 60min = 18:00 UTC)
+    # — which, displayed in +05:45, is "23:45", never landing on a
+    # local hour boundary.
+    forecast = pd.DataFrame({
+        "issued_at": [pd.Timestamp("2026-09-03 12:00:00+05:45")],
+        "forecast_target_time": [pd.Timestamp("2026-09-03 23:45:00+05:45")],  # = 18:00 UTC
+        "temperature_2m_c": [21.5],
+        "precipitation_mm": [0.0],
+    })
+    result = _add_forecast_features(df, forecast)
+    assert result["forecast_temp_c"].iloc[0] == 21.5, (
+        "forecast join failed under a non-UTC timezone offset — "
+        "this is the exact bug hit in production on a Nepal-timezone machine"
+    )
