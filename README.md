@@ -17,7 +17,7 @@ git clone <this-repo>
 cd bikeshare-platform
 pip install -e ".[dev]"
 cp .env.example .env        # fill in your Backblaze B2 credentials if using cloud collection
-pytest tests/ -v             # 38 tests should pass
+pytest tests/ -v             # 52 tests should pass
 python -m src.ingestion.poll_station_status   # one-shot poll of live station_status
 ```
 
@@ -34,6 +34,12 @@ pip install dbt-core dbt-duckdb
 # that relative path wrong and fail with "No files found". An absolute
 # path avoids this entirely — see docs/DECISIONS.md for the full story.
 DBT_PROFILES_DIR=. dbt build --vars "{\"raw_data_path\": \"$(pwd)/../raw\"}"
+```
+
+For the ML training pipeline (baselines + LightGBM, no extra installs needed
+— duckdb/lightgbm/mlflow are already part of the base install above):
+```bash
+python -m src.ml.train
 ```
 
 ## Status
@@ -77,11 +83,49 @@ by a 2026 decline).
 `docs/DECISIONS.md` for the full list of real issues found and how each
 was resolved.
 
+### Week 3 — Dagster + CI (complete)
+
+- `dagster/bikeshare_dagster/` — 3 ingestion assets + the entire dbt DAG
+  (staging, snapshot, marts) pulled into one asset graph via `dagster-dbt`
+- One automatic schedule (daily dbt rebuild) — deliberately NOT scheduling
+  ingestion again, since GitHub Actions already owns continuous collection
+  (see `docs/DECISIONS.md` for why running both would be redundant)
+- `.github/workflows/ci.yml` — lint + full test suite + a sample dbt build
+  on every push
+
+### Week 4 — Analytics dashboard + decision memo (complete)
+
+- `docs/metrics.md` — precise definitions for every metric, including the
+  invented "station empty-hours" KPI
+- 4 new marts answering all 5 of the plan's analytics questions
+  (member/casual patterns, weather elasticity, empty-hours, commute
+  corridor asymmetry, capacity exceedance)
+- `dashboard/app.py` — a real Streamlit dashboard covering all 5 questions
+- `docs/decision-memo.md` — one recommendation (an evening rebalancing
+  route for the National Mall monument corridor), backed by real numbers
+  from the dashboard
+
+### Week 5 — Baselines + ML model (complete)
+
+- `src/features/build_features.py` — leakage-safe feature engineering
+  (lags, rolling means, neighbor station state, cyclical time encodings,
+  a weather-forecast join that only ever sees what was known at
+  prediction time — proven with a deliberate adversarial test)
+- `src/ml/baselines.py` — persistence, seasonal-naive, and station-hour-mean
+- `src/ml/train.py` — LightGBM with a rolling-origin backtest (purge gap,
+  not a random split), MLflow logging, adapts fold count honestly to
+  however much real history actually exists
+- `docs/model-card.md` — what the model does, how it was evaluated, and
+  where it genuinely fails. **Current real result: the model does not yet
+  beat the persistence baseline** (0.973 vs. 0.803 MAE, ~3 days of real
+  history) — reported honestly, exactly as the plan expects this to
+  sometimes happen
+- Two real bugs found and fixed along the way — a relative-path gotcha and
+  a serious timezone bug that was invisible in development and only
+  surfaced on a non-UTC-timezone machine (both in `docs/DECISIONS.md`)
+
 ### Not started yet
 
-- Week 3: Dagster orchestration, CI
-- Week 4: analytics dashboard + decision memo
-- Week 5: baseline models + leakage-checked ML model
 - Week 6: serving (FastAPI) + monitoring
 - Week 7: polish, video, final README pass
 
@@ -98,21 +142,39 @@ src/
     archive_weather_forecast.py   # (3) daily forecast, issue-timestamped
     fetch_weather_actuals.py      # (4) historical weather backfill
     fetch_trip_history.py         # (5) historical trips - schema-drift + dtype-consistency handling
+  features/
+    build_features.py             # leakage-safe feature engineering, shared train/serve
+  ml/
+    baselines.py                  # persistence, seasonal-naive, station-hour-mean
+    train.py                      # rolling-origin backtest + LightGBM + MLflow logging
   tools/
     download_from_b2.py           # pull accumulated cloud data down locally, on demand
 
 dbt/
-  models/staging/                 # 5 models - rename/cast/dedupe only
-  models/marts/                   # 4 models - dim_station, dim_trip_station, fct_trip, fct_station_status_hourly
+  models/staging/                 # 6 models - rename/cast/dedupe only
+  models/marts/                   # 8 models - dims, facts, and Week 4's analytics marts
   models/schema.yml               # generic tests, with documented severity choices
   snapshots/stations_snapshot.sql # SCD Type 2
   tests/                          # 3 singular tests, all with documented severity
 
-tests/                            # 38 Python tests, 5 test files, fixtures for every source
-.github/workflows/                # 2 cloud-collection workflows (repository_dispatch triggered)
+dagster/
+  bikeshare_dagster/               # Dagster project: ingestion assets + full dbt DAG
+  workspace.yaml
+
+dashboard/
+  app.py                          # Streamlit dashboard, all 5 Week 4 analytics questions
+
+tests/                            # 52 Python tests, 8 test files, fixtures for every source
+.github/workflows/
+  poll-station-status.yml          # cloud collection (repository_dispatch triggered)
+  archive-weather-forecast.yml     # cloud collection (repository_dispatch triggered)
+  ci.yml                           # lint + tests + sample dbt build on every push
 docs/
   city-selection.md               # Divvy vs Capital Bikeshare decision
   cloud-setup.md                  # B2 + cron-job.org setup guide
   DECISIONS.md                    # every real bug/finding hit, with root cause and fix
+  metrics.md                      # precise definitions for every analytics metric
+  decision-memo.md                # Week 4's recommendation, backed by real numbers
+  model-card.md                   # Week 5's model — what it does, how it fails
 raw/                               # data lands here locally when downloaded
 ```
