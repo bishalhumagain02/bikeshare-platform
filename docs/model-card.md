@@ -45,35 +45,42 @@ full run on real accumulated station_status history.** Re-run
 polling history has accumulated (see the honest data-volume caveat in
 `docs/DECISIONS.md`) before treating any number here as a real result.
 
-### First real-data run (~3 days of history, 371,514 rows)
+### Results over time, as real history accumulates
 
-**Post-timezone-fix result** (weather features now genuinely
-participating, confirmed by non-zero importance below):
+Tracking every real run here (not overwriting) — the model's honest
+trajectory as more data becomes available is itself part of the story.
 
-| | MAE |
-|---|---|
-| Persistence baseline | **0.803** (best) |
-| Seasonal-naive | 1.349 |
-| **Model (LightGBM)** | 0.973 |
-| Station-hour-mean baseline | 2.924 |
+| Run date | Rows | History span | Persistence MAE | Model MAE | Model wins? |
+|---|---|---|---|---|---|
+| 2026-09-08 (pre-timezone-fix) | 371,514 | ~3 days | 0.803 | 0.982 | No (weather features broken — see below) |
+| 2026-09-08 (post-timezone-fix) | 371,514 | ~3 days | 0.803 | 0.973 | No |
+| 2026-09-12 | 921,424 | ~7 days | 0.817 | 0.981 | No (gap essentially unchanged: 0.164 vs. 0.170) |
 
-**The model still does not beat the best baseline** — and this time
-it's a fully trustworthy result, not one confounded by the timezone
-bug (`forecast_temp_c` now shows real importance: 265, up from 0
-before the fix; `forecast_precip_mm` barely registers at 1, suggesting
-precipitation isn't very informative at this station granularity yet,
-which is itself a believable finding rather than a bug symptom).
+**Post-timezone-fix result is the first fully trustworthy one** —
+`forecast_temp_c` now shows real importance (265, up from 0), so this
+comparison isn't confounded by the bug described in `docs/DECISIONS.md`.
 
 With only ~3 days of real history, persistence remains genuinely hard
 to beat — there isn't yet enough time-of-day/day-of-week variety for
 the model to learn beyond what "assume no change" already captures.
 Top features: `rolling_mean_60m`, `capacity`, `lag_60m`, `lag_30m` —
 recent trend and station size dominate; the weather signal is real but
-comparatively minor at this data volume. Re-check this comparison
-after several more weeks of accumulated history — the honest
-expectation is that lag/rolling features become more informative as
-more genuine day-to-day variation enters the training data, which
-could tip the balance the model's way.
+comparatively minor at this data volume.
+
+**The honest trend so far:** doubling the data (3→7 days) did NOT
+meaningfully close the gap — the model's shortfall versus persistence
+was 0.170 MAE at ~3 days and 0.164 MAE at ~7 days, essentially flat.
+Feature importances also shifted somewhat (`hour_cos` and `dow_sin`
+now rank higher, suggesting the model is starting to pick up on
+day-of-week structure it couldn't see with less history), but this
+hasn't yet translated into beating persistence. This is worth
+continuing to track rather than assuming more data will automatically
+fix it — it's possible persistence is simply a strong baseline for
+this specific 60-minute horizon at typical stations, and the real
+place the model may pull ahead is on a subset of harder cases
+(quiet stations, unusual hours) that an aggregate MAE comparison
+hides — exactly the "broken out by station tier" analysis the plan
+recommends and this project hasn't done yet (see the gap noted below).
 
 ## Where it genuinely fails or shouldn't be trusted
 

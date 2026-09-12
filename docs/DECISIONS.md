@@ -213,6 +213,20 @@ redocked" pattern common to every real-world bikeshare system (lost,
 stolen, or a forgotten return). ~0.1-0.2% of total trips — a normal
 rate for this kind of system.
 
+### 15 station-hours where bikes_available exceeds installed capacity
+The plan predicted this test would eventually fail on real data — it
+did, after several days of accumulated live polling. Investigated
+before accepting it: confirmed the affected stations' capacity has
+NOT changed over their observed history (single SCD2 version each,
+ruling out a stale-capacity join bug). The overage is real, large (up
+to ~150% of capacity: 30-35 bikes at a 23-dock station), and sustained
+across multiple hours on two separate days — both stations are large,
+high-demand locations near Georgetown University. Most likely
+explanation: e-bikes parked as "valet" overflow near the station
+(locked to railings/signposts rather than a physical dock) still
+count as "available at this station" in the live feed, legitimately
+exceeding the marked dock capacity.
+
 ---
 
 ## Real bug: DuckDB's default timezone follows the host machine's OS setting
